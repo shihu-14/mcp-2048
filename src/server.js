@@ -1,16 +1,50 @@
 #!/usr/bin/env node
 import { chooseMove } from "./game.js";
 import {
+  DEFAULT_BROWSER_EXECUTABLE_PATH,
+  DEFAULT_BROWSER_MODE,
   DEFAULT_CONNECT_URL,
   DEFAULT_DELAY_MS,
   DEFAULT_MAX_STEPS,
+  DEFAULT_MAX_RESTARTS,
   DEFAULT_TARGET_URL,
+  MAX_DELAY_MS,
+  MIN_DELAY_MS,
   inspect2048,
   play2048,
   step2048
 } from "./browser.js";
 
 const PROTOCOL_VERSION = "2024-11-05";
+
+const browserProperties = {
+  browserMode: {
+    type: "string",
+    enum: ["auto", "connect", "launch"],
+    default: DEFAULT_BROWSER_MODE,
+    description: "auto tries connectUrl first, then launches Chrome if the default debugging port is unavailable."
+  },
+  connectUrl: {
+    type: "string",
+    description: "Chrome DevTools browser URL used when browserMode is auto or connect.",
+    default: DEFAULT_CONNECT_URL
+  },
+  browserExecutablePath: {
+    type: "string",
+    description: "Chromium executable path used when launching a controlled browser.",
+    default: DEFAULT_BROWSER_EXECUTABLE_PATH
+  },
+  headless: {
+    type: "boolean",
+    description: "Launch browser in headless mode when browserMode is launch or auto falls back to launch.",
+    default: false
+  },
+  targetUrl: {
+    type: "string",
+    description: "URL for the 2048 game tab.",
+    default: DEFAULT_TARGET_URL
+  }
+};
 
 const toolDefinitions = [
   {
@@ -20,16 +54,7 @@ const toolDefinitions = [
       type: "object",
       additionalProperties: false,
       properties: {
-        connectUrl: {
-          type: "string",
-          description: "Chrome DevTools browser URL.",
-          default: DEFAULT_CONNECT_URL
-        },
-        targetUrl: {
-          type: "string",
-          description: "URL substring for the 2048 tab.",
-          default: DEFAULT_TARGET_URL
-        },
+        ...browserProperties,
         depth: {
           type: "integer",
           minimum: 0,
@@ -77,18 +102,11 @@ const toolDefinitions = [
       type: "object",
       additionalProperties: false,
       properties: {
-        connectUrl: {
-          type: "string",
-          default: DEFAULT_CONNECT_URL
-        },
-        targetUrl: {
-          type: "string",
-          default: DEFAULT_TARGET_URL
-        },
+        ...browserProperties,
         delayMs: {
           type: "integer",
-          minimum: 500,
-          maximum: 1000,
+          minimum: MIN_DELAY_MS,
+          maximum: MAX_DELAY_MS,
           default: DEFAULT_DELAY_MS
         },
         depth: {
@@ -106,23 +124,25 @@ const toolDefinitions = [
       type: "object",
       additionalProperties: false,
       properties: {
-        connectUrl: {
-          type: "string",
-          default: DEFAULT_CONNECT_URL
-        },
-        targetUrl: {
-          type: "string",
-          default: DEFAULT_TARGET_URL
-        },
+        ...browserProperties,
         maxSteps: {
           type: "integer",
           minimum: 1,
           default: DEFAULT_MAX_STEPS
         },
+        maxRestarts: {
+          type: "integer",
+          minimum: 0,
+          default: DEFAULT_MAX_RESTARTS
+        },
+        restartOnGameOver: {
+          type: "boolean",
+          default: true
+        },
         delayMs: {
           type: "integer",
-          minimum: 500,
-          maximum: 1000,
+          minimum: MIN_DELAY_MS,
+          maximum: MAX_DELAY_MS,
           default: DEFAULT_DELAY_MS
         },
         depth: {

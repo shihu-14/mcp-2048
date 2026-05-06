@@ -9,7 +9,7 @@ import {
   moveBoard,
   slideLineLeft
 } from "../src/game.js";
-import { normalizeDelay, normalizeMaxSteps } from "../src/browser.js";
+import { normalizeDelay, normalizeMaxRestarts, normalizeMaxSteps } from "../src/browser.js";
 import {
   boardFromState,
   decodePlay2048Payload,
@@ -131,13 +131,17 @@ test("keyForDirection maps moves to browser arrow keys", () => {
 });
 
 test("runtime controls enforce bounded delays and step limits", () => {
-  assert.equal(normalizeDelay(500), 500);
+  assert.equal(normalizeDelay(50), 50);
+  assert.equal(normalizeDelay(75), 75);
   assert.equal(normalizeDelay(1000), 1000);
   assert.equal(normalizeMaxSteps(1), 1);
+  assert.equal(normalizeMaxRestarts(0), 0);
+  assert.equal(normalizeMaxRestarts(2), 2);
 
-  assert.throws(() => normalizeDelay(499), /at least 500ms/);
+  assert.throws(() => normalizeDelay(49), /at least 50ms/);
   assert.throws(() => normalizeDelay(1001), /1000ms or less/);
   assert.throws(() => normalizeMaxSteps(0), /positive integer/);
+  assert.throws(() => normalizeMaxRestarts(-1), /non-negative integer/);
 });
 
 test("recognition parses classic 2048 DOM tile classes", () => {
@@ -173,18 +177,18 @@ test("recognition decodes current play2048.co storage format", () => {
       [null, null, null, { value: 16, position: { x: 3, y: 3 } }]
     ]
   };
-  const key = play2048StorageKey("k-tutorial");
+  const key = play2048StorageKey("k-standard");
   const encoded = encodePlay2048Payload(state);
 
   assert.deepEqual(decodePlay2048Payload(encoded), state);
 
   const recognized = recognizeSnapshot({
     localStorageEntries: [[key, encoded]],
-    locationPath: "/tutorial",
+    locationPath: "/",
     tileClassNames: []
   });
 
-  assert.equal(recognized.recognitionSource, "play2048-storage:tutorial");
+  assert.equal(recognized.recognitionSource, "play2048-storage:standard");
   assert.equal(recognized.scoreText, "64");
   assert.deepEqual(recognized.board, [
     [2, 0, 0, 0],
