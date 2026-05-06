@@ -13,6 +13,8 @@ Manual remote debugging is optional. By default, `browserMode: "auto"` tries `ht
 
 Remote debugging is only needed when you want the MCP server to attach to a browser window you started yourself. A normal Chrome window does not expose an automation endpoint for security and profile-locking reasons, so Puppeteer cannot control an arbitrary already-open browser unless Chrome was started with `--remote-debugging-port`.
 
+Chrome may print GoogleUpdater, GCM, TensorFlow Lite, Metal, IME, or SSL handshake messages to the terminal. Those messages are Chrome diagnostics, not 2048 failures. The MCP-launched browser uses quieter launch flags and does not require you to keep a noisy Chrome command open in Terminal.
+
 ## Install
 
 ```sh
@@ -38,12 +40,13 @@ If your client already has other MCP servers, add `mcp-2048` under the same `mcp
 
 ## Chat Prompts
 
-Autoplay with the default automatic browser launch:
+Shortest start prompt:
 
 ```text
-mcp-2048 の play_2048 を使って https://play2048.co/ を自動プレイして。
-browserMode は auto、maxSteps は 2000、delayMs は 75、restartOnGameOver は true、maxRestarts は 2。
+mcp-2048で2048を開始して。
 ```
+
+The intended tool is `start_2048`. It already uses `https://play2048.co/`, automatic browser launch, `maxSteps: 3000`, `delayMs: 75`, `restartOnGameOver: true`, `maxRestarts: 5`, and `depth: 2`.
 
 One move only:
 
@@ -67,6 +70,7 @@ browserMode は connect、connectUrl は http://127.0.0.1:9222、targetUrl は h
 
 ## Tools
 
+- `start_2048`: starts autoplay with reliable defaults. No arguments are required.
 - `inspect_2048`: connects to the browser and reads the current board, empty cells, score text, game status, recognition source, and recommended move.
 - `choose_2048_move`: chooses the best move for a provided 4x4 board without touching the browser.
 - `step_2048`: reads the current browser board, chooses one legal move, sends the arrow key, waits for the board to settle, and retries focus once if the board did not change.
@@ -79,11 +83,11 @@ Common arguments:
 - `browserExecutablePath`: Chromium executable used by `launch`. Defaults to `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`.
 - `headless`: launch without a visible window. Defaults to `false`.
 - `targetUrl`: game URL. Defaults to `https://play2048.co/`.
-- `maxSteps`: upper bound for a run. Defaults to `2000`.
+- `maxSteps`: upper bound for a run. Defaults to `3000`.
 - `delayMs`: delay after each key action. Defaults to `75`. Valid range is `50` to `1000`.
 - `restartOnGameOver`: reset and retry when the board reaches game over. Defaults to `true`.
-- `maxRestarts`: maximum reset count in one `play_2048` run. Defaults to `2`.
-- `depth`: search depth override. Higher can improve moves but slows each step.
+- `maxRestarts`: maximum reset count in one `play_2048` run. Defaults to `5`.
+- `depth`: search depth override. Defaults to `2`. Higher can improve moves but slows each step.
 
 Example MCP tool input:
 
@@ -91,10 +95,11 @@ Example MCP tool input:
 {
   "browserMode": "auto",
   "targetUrl": "https://play2048.co/",
-  "maxSteps": 2000,
+  "maxSteps": 3000,
   "delayMs": 75,
   "restartOnGameOver": true,
-  "maxRestarts": 2
+  "maxRestarts": 5,
+  "depth": 2
 }
 ```
 
@@ -153,7 +158,24 @@ Only use this when you want to control a browser window you opened yourself:
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --remote-debugging-port=9222 \
   --user-data-dir=/private/tmp/mcp-2048-chrome \
+  --disable-background-networking \
+  --disable-component-update \
+  --disable-sync \
+  --log-level=3 \
   --no-first-run
+```
+
+If you do not want Chrome diagnostics in the terminal, redirect stderr:
+
+```sh
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/private/tmp/mcp-2048-chrome \
+  --disable-background-networking \
+  --disable-component-update \
+  --disable-sync \
+  --log-level=3 \
+  --no-first-run 2>/dev/null &
 ```
 
 Then open `https://play2048.co/` and call tools with:

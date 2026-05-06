@@ -7,8 +7,9 @@ export const DEFAULT_CONNECT_URL = "http://127.0.0.1:9222";
 export const DEFAULT_BROWSER_MODE = "auto";
 export const DEFAULT_BROWSER_EXECUTABLE_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 export const DEFAULT_DELAY_MS = 75;
-export const DEFAULT_MAX_STEPS = 2000;
-export const DEFAULT_MAX_RESTARTS = 2;
+export const DEFAULT_MAX_STEPS = 3000;
+export const DEFAULT_MAX_RESTARTS = 5;
+export const DEFAULT_DEPTH = 2;
 export const MIN_DELAY_MS = 50;
 export const MAX_DELAY_MS = 1000;
 const PLAY2048_STORAGE_MODES = ["tutorial", "standard", "classic", "partner1"];
@@ -69,9 +70,18 @@ async function launchBrowser(options = {}) {
     executablePath,
     headless: options.headless ?? false,
     defaultViewport: null,
+    dumpio: false,
     args: [
       "--no-first-run",
-      "--disable-features=Translate"
+      "--no-default-browser-check",
+      "--disable-background-networking",
+      "--disable-component-update",
+      "--disable-default-apps",
+      "--disable-extensions",
+      "--disable-features=Translate,OptimizationHints,MediaRouter,AutofillServerCommunication",
+      "--disable-sync",
+      "--log-level=3",
+      "--v=0"
     ]
   });
 
@@ -287,7 +297,7 @@ export async function inspect2048(options = {}) {
     return {
       ...state,
       emptyCells: emptyCells(state.board),
-      recommendation: chooseMove(state.board, { depth: options.depth })
+      recommendation: chooseMove(state.board, { depth: options.depth ?? DEFAULT_DEPTH })
     };
   } finally {
     if (shouldDisconnect) {
@@ -312,7 +322,7 @@ export async function step2048(options = {}) {
       };
     }
 
-    const decision = chooseMove(before.board, { depth: options.depth });
+    const decision = chooseMove(before.board, { depth: options.depth ?? DEFAULT_DEPTH });
     if (!decision.direction) {
       return {
         stopped: true,
@@ -394,7 +404,7 @@ export async function play2048(options = {}) {
         };
       }
 
-      const decision = chooseMove(before.board, { depth: options.depth });
+      const decision = chooseMove(before.board, { depth: options.depth ?? DEFAULT_DEPTH });
       if (!decision.direction) {
         if (restartOnGameOver && restarts < maxRestarts) {
           restarts += 1;
@@ -504,4 +514,17 @@ export async function play2048(options = {}) {
       await browser.disconnect();
     }
   }
+}
+
+export async function start2048(options = {}) {
+  return play2048({
+    browserMode: DEFAULT_BROWSER_MODE,
+    targetUrl: DEFAULT_TARGET_URL,
+    maxSteps: DEFAULT_MAX_STEPS,
+    delayMs: DEFAULT_DELAY_MS,
+    restartOnGameOver: true,
+    maxRestarts: DEFAULT_MAX_RESTARTS,
+    depth: DEFAULT_DEPTH,
+    ...options
+  });
 }

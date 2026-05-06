@@ -4,6 +4,7 @@ import {
   DEFAULT_BROWSER_EXECUTABLE_PATH,
   DEFAULT_BROWSER_MODE,
   DEFAULT_CONNECT_URL,
+  DEFAULT_DEPTH,
   DEFAULT_DELAY_MS,
   DEFAULT_MAX_STEPS,
   DEFAULT_MAX_RESTARTS,
@@ -12,6 +13,7 @@ import {
   MIN_DELAY_MS,
   inspect2048,
   play2048,
+  start2048,
   step2048
 } from "./browser.js";
 
@@ -46,7 +48,48 @@ const browserProperties = {
   }
 };
 
+const runProperties = {
+  ...browserProperties,
+  maxSteps: {
+    type: "integer",
+    minimum: 1,
+    default: DEFAULT_MAX_STEPS
+  },
+  maxRestarts: {
+    type: "integer",
+    minimum: 0,
+    default: DEFAULT_MAX_RESTARTS
+  },
+  restartOnGameOver: {
+    type: "boolean",
+    default: true
+  },
+  delayMs: {
+    type: "integer",
+    minimum: MIN_DELAY_MS,
+    maximum: MAX_DELAY_MS,
+    default: DEFAULT_DELAY_MS
+  },
+  depth: {
+    type: "integer",
+    minimum: 0,
+    maximum: 5,
+    default: DEFAULT_DEPTH
+  }
+};
+
 const toolDefinitions = [
+  {
+    name: "start_2048",
+    description: "Start playing 2048 with reliable defaults. No arguments are required.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        ...runProperties
+      }
+    }
+  },
   {
     name: "inspect_2048",
     description: "Read the current 2048 board from a browser tab and return status plus a recommended move.",
@@ -59,6 +102,7 @@ const toolDefinitions = [
           type: "integer",
           minimum: 0,
           maximum: 5,
+          default: DEFAULT_DEPTH,
           description: "Search depth override."
         }
       }
@@ -112,7 +156,8 @@ const toolDefinitions = [
         depth: {
           type: "integer",
           minimum: 0,
-          maximum: 5
+          maximum: 5,
+          default: DEFAULT_DEPTH
         }
       }
     }
@@ -124,38 +169,16 @@ const toolDefinitions = [
       type: "object",
       additionalProperties: false,
       properties: {
-        ...browserProperties,
-        maxSteps: {
-          type: "integer",
-          minimum: 1,
-          default: DEFAULT_MAX_STEPS
-        },
-        maxRestarts: {
-          type: "integer",
-          minimum: 0,
-          default: DEFAULT_MAX_RESTARTS
-        },
-        restartOnGameOver: {
-          type: "boolean",
-          default: true
-        },
-        delayMs: {
-          type: "integer",
-          minimum: MIN_DELAY_MS,
-          maximum: MAX_DELAY_MS,
-          default: DEFAULT_DELAY_MS
-        },
-        depth: {
-          type: "integer",
-          minimum: 0,
-          maximum: 5
-        }
+        ...runProperties
       }
     }
   }
 ];
 
 async function callTool(name, args = {}) {
+  if (name === "start_2048") {
+    return start2048(args);
+  }
   if (name === "inspect_2048") {
     return inspect2048(args);
   }
