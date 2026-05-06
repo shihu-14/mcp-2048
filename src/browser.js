@@ -6,11 +6,11 @@ export const DEFAULT_TARGET_URL = "https://play2048.co/";
 export const DEFAULT_CONNECT_URL = "http://127.0.0.1:9222";
 export const DEFAULT_BROWSER_MODE = "auto";
 export const DEFAULT_BROWSER_EXECUTABLE_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-export const DEFAULT_DELAY_MS = 75;
+export const DEFAULT_DELAY_MS = 5;
 export const DEFAULT_MAX_STEPS = 3000;
 export const DEFAULT_MAX_RESTARTS = 5;
 export const DEFAULT_DEPTH = 2;
-export const MIN_DELAY_MS = 50;
+export const MIN_DELAY_MS = 5;
 export const MAX_DELAY_MS = 1000;
 const PLAY2048_STORAGE_MODES = ["tutorial", "standard", "classic", "partner1"];
 

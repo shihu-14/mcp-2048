@@ -131,14 +131,15 @@ test("keyForDirection maps moves to browser arrow keys", () => {
 });
 
 test("runtime controls enforce bounded delays and step limits", () => {
+  assert.equal(normalizeDelay(), 5);
+  assert.equal(normalizeDelay(5), 5);
   assert.equal(normalizeDelay(50), 50);
-  assert.equal(normalizeDelay(75), 75);
   assert.equal(normalizeDelay(1000), 1000);
   assert.equal(normalizeMaxSteps(1), 1);
   assert.equal(normalizeMaxRestarts(0), 0);
   assert.equal(normalizeMaxRestarts(2), 2);
 
-  assert.throws(() => normalizeDelay(49), /at least 50ms/);
+  assert.throws(() => normalizeDelay(4), /at least 5ms/);
   assert.throws(() => normalizeDelay(1001), /1000ms or less/);
   assert.throws(() => normalizeMaxSteps(0), /positive integer/);
   assert.throws(() => normalizeMaxRestarts(-1), /non-negative integer/);

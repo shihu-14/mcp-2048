@@ -46,13 +46,13 @@ Shortest start prompt:
 mcp-2048で2048を開始して。
 ```
 
-The intended tool is `start_2048`. It already uses `https://play2048.co/`, automatic browser launch, `maxSteps: 3000`, `delayMs: 75`, `restartOnGameOver: true`, `maxRestarts: 5`, and `depth: 2`.
+The intended tool is `start_2048`. It already uses `https://play2048.co/`, automatic browser launch, `maxSteps: 3000`, `delayMs: 5`, `restartOnGameOver: true`, `maxRestarts: 5`, and `depth: 2`.
 
 One move only:
 
 ```text
 mcp-2048 の step_2048 を使って現在の盤面を読んで1手だけ操作して。
-targetUrl は https://play2048.co/、delayMs は 75。
+targetUrl は https://play2048.co/、delayMs は 5。
 ```
 
 Inspect only:
@@ -84,7 +84,7 @@ Common arguments:
 - `headless`: launch without a visible window. Defaults to `false`.
 - `targetUrl`: game URL. Defaults to `https://play2048.co/`.
 - `maxSteps`: upper bound for a run. Defaults to `3000`.
-- `delayMs`: delay after each key action. Defaults to `75`. Valid range is `50` to `1000`.
+- `delayMs`: delay after each key action. Defaults to `5`. Valid range is `5` to `1000`.
 - `restartOnGameOver`: reset and retry when the board reaches game over. Defaults to `true`.
 - `maxRestarts`: maximum reset count in one `play_2048` run. Defaults to `5`.
 - `depth`: search depth override. Defaults to `2`. Higher can improve moves but slows each step.
@@ -96,7 +96,7 @@ Example MCP tool input:
   "browserMode": "auto",
   "targetUrl": "https://play2048.co/",
   "maxSteps": 3000,
-  "delayMs": 75,
+  "delayMs": 5,
   "restartOnGameOver": true,
   "maxRestarts": 5,
   "depth": 2
@@ -123,7 +123,7 @@ Use this for the most reliable run:
   "browserMode": "auto",
   "targetUrl": "https://play2048.co/",
   "maxSteps": 3000,
-  "delayMs": 75,
+  "delayMs": 5,
   "restartOnGameOver": true,
   "maxRestarts": 5,
   "depth": 2
@@ -148,7 +148,7 @@ The decision engine evaluates only legal moves. It combines expected random tile
 - `max-steps`: the run hit the step cap before winning or losing. Increase `maxSteps`, for example to `3000`.
 - `unchanged-board`: the chosen legal key did not change the board after focus retry. Click the game window, close overlays, or use `browserMode: "launch"` so the controlled browser owns focus.
 - Recognition error: the page is not loaded, blocked, or not at `https://play2048.co/`. Reload the target URL or call `inspect_2048` first.
-- Slow run: reduce `depth` or use `delayMs: 50`. Do not go below `50`; the page may miss inputs or storage may not settle.
+- Slow run: reduce `depth`. `delayMs` defaults to `5`; if inputs are missed, raise it to `50` or `75`.
 
 ## Manual Remote Debugging Mode
 
