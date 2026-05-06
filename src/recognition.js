@@ -1,5 +1,6 @@
 const APP_STATE_PREFIX = "k";
-const APP_MODES = ["tutorial", "standard", "classic", "partner1"];
+const TUTORIAL_MODE = "tutorial";
+const PLAYABLE_MODES = ["standard", "classic", "partner1"];
 const OBFUSCATION_KEY = "dGhlIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw==";
 const BASE64_PADDING = ["", "=", "=="];
 
@@ -196,11 +197,15 @@ function scoreFromState(state) {
 
 function modeOrder(locationPath = "") {
   const path = locationPath.toLowerCase();
-  const preferred = APP_MODES.find((mode) => path.includes(mode));
-  if (!preferred) {
-    return APP_MODES;
+  if (path.includes(TUTORIAL_MODE)) {
+    return [TUTORIAL_MODE];
   }
-  return [preferred, ...APP_MODES.filter((mode) => mode !== preferred)];
+
+  const preferred = PLAYABLE_MODES.find((mode) => path.includes(mode));
+  if (!preferred) {
+    return PLAYABLE_MODES;
+  }
+  return [preferred, ...PLAYABLE_MODES.filter((mode) => mode !== preferred)];
 }
 
 function storageMap(entries = []) {

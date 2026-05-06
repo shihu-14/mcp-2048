@@ -199,6 +199,95 @@ test("recognition decodes current play2048.co storage format", () => {
   ]);
 });
 
+test("recognition prefers standard storage over stale tutorial storage on root URL", () => {
+  const tutorialState = {
+    state: "playing",
+    score: 36,
+    board: [
+      [null, null, null, { value: 2, position: { x: 3, y: 0 } }],
+      [{ value: 2, position: { x: 0, y: 1 } }, null, null, null],
+      [{ value: 4, position: { x: 0, y: 2 } }, null, null, null],
+      [{ value: 8, position: { x: 0, y: 3 } }, { value: 8, position: { x: 1, y: 3 } }, null, null]
+    ]
+  };
+  const standardState = {
+    state: "playing",
+    score: 4,
+    board: [
+      [{ value: 2, position: { x: 0, y: 0 } }, { value: 2, position: { x: 1, y: 0 } }, null, null],
+      [null, null, null, null],
+      [null, null, null, null],
+      [null, null, null, null]
+    ]
+  };
+
+  const recognized = recognizeSnapshot({
+    localStorageEntries: [
+      [play2048StorageKey("k-tutorial"), encodePlay2048Payload(tutorialState)],
+      [play2048StorageKey("k-standard"), encodePlay2048Payload(standardState)]
+    ],
+    locationPath: "/",
+    tileClassNames: []
+  });
+
+  assert.equal(recognized.recognitionSource, "play2048-storage:standard");
+  assert.deepEqual(recognized.board, [
+    [2, 2, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0]
+  ]);
+});
+
+test("recognition ignores tutorial storage on root URL when no playable storage exists", () => {
+  const tutorialState = {
+    state: "playing",
+    score: 36,
+    board: [
+      [null, null, null, { value: 2, position: { x: 3, y: 0 } }],
+      [{ value: 2, position: { x: 0, y: 1 } }, null, null, null],
+      [{ value: 4, position: { x: 0, y: 2 } }, null, null, null],
+      [{ value: 8, position: { x: 0, y: 3 } }, { value: 8, position: { x: 1, y: 3 } }, null, null]
+    ]
+  };
+
+  const recognized = recognizeSnapshot({
+    localStorageEntries: [[play2048StorageKey("k-tutorial"), encodePlay2048Payload(tutorialState)]],
+    locationPath: "/",
+    tileClassNames: []
+  });
+
+  assert.equal(recognized.recognitionSource, "unavailable");
+  assert.equal(recognized.recognized, false);
+});
+
+test("recognition still reads tutorial storage on tutorial URL", () => {
+  const tutorialState = {
+    state: "playing",
+    score: 36,
+    board: [
+      [null, null, null, { value: 2, position: { x: 3, y: 0 } }],
+      [{ value: 2, position: { x: 0, y: 1 } }, null, null, null],
+      [{ value: 4, position: { x: 0, y: 2 } }, null, null, null],
+      [{ value: 8, position: { x: 0, y: 3 } }, { value: 8, position: { x: 1, y: 3 } }, null, null]
+    ]
+  };
+
+  const recognized = recognizeSnapshot({
+    localStorageEntries: [[play2048StorageKey("k-tutorial"), encodePlay2048Payload(tutorialState)]],
+    locationPath: "/tutorial",
+    tileClassNames: []
+  });
+
+  assert.equal(recognized.recognitionSource, "play2048-storage:tutorial");
+  assert.deepEqual(recognized.board, [
+    [0, 0, 0, 2],
+    [2, 0, 0, 0],
+    [4, 0, 0, 0],
+    [8, 8, 0, 0]
+  ]);
+});
+
 test("boardFromState handles selecting state via previousGameplay", () => {
   const parsed = boardFromState({
     state: "selecting",
