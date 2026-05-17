@@ -4,6 +4,12 @@ MCP server for autonomously playing the browser version of 2048 at `https://play
 
 The server recognizes the 4x4 board from the current `play2048.co` browser state or from classic 2048 DOM tiles, chooses a move with a corner-oriented heuristic and expectimax search, sends `ArrowUp`, `ArrowDown`, `ArrowLeft`, or `ArrowRight` through Puppeteer, waits between moves, and stops on win, game over, max steps, or repeated input failure.
 
+## Sample Video
+
+<video src="assets/2048-sample-video.mov" controls width="720"></video>
+
+[Open sample video](assets/2048-sample-video.mov)
+
 ## Requirements
 
 - Node.js 20 or newer
