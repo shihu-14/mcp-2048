@@ -330,7 +330,15 @@ function statesEqual(first, second) {
   return (
     boardsEqual(first.board, second.board) &&
     first.status === second.status &&
-    first.score === second.score
+    first.score === second.score &&
+    first.recognitionSource === second.recognitionSource &&
+    first.duplicateTiles === second.duplicateTiles
+  );
+}
+
+function isStableCandidate(state) {
+  return (
+    state.recognitionSource !== "classic-dom" || state.duplicateTiles === 0
   );
 }
 
@@ -346,6 +354,12 @@ export async function waitForStableState(page, options = {}) {
     try {
       const current = await readGameState(page);
       lastError = null;
+      if (!isStableCandidate(current)) {
+        previous = null;
+        stableCount = 0;
+        await delay(intervalMs);
+        continue;
+      }
       if (previous && statesEqual(previous, current)) {
         stableCount += 1;
         if (stableCount >= samples - 1) return current;

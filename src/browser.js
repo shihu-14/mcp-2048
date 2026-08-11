@@ -4,6 +4,7 @@ export const DEFAULT_BROWSER_MODE = "auto";
 export const DEFAULT_CONNECT_URL = "http://127.0.0.1:9222";
 
 const BROWSER_MODES = ["auto", "connect", "launch"];
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const DIRECTION_KEYS = {
   up: "ArrowUp",
   down: "ArrowDown",
@@ -38,6 +39,11 @@ function normalizeConnectUrl(connectUrl = DEFAULT_CONNECT_URL) {
   if (!["http:", "https:"].includes(parsed.protocol)) {
     throw new Error("connectUrl must be a valid HTTP or HTTPS URL.");
   }
+  if (!LOOPBACK_HOSTNAMES.has(parsed.hostname)) {
+    throw new Error(
+      "connectUrl must use the loopback host localhost, 127.0.0.1, or ::1.",
+    );
+  }
   return parsed.href.replace(/\/$/, "");
 }
 
@@ -48,6 +54,14 @@ function pageMatchesTarget(pageUrl, targetUrl) {
     return page.origin === target.origin && page.pathname === target.pathname;
   } catch {
     return false;
+  }
+}
+
+function assertTargetPage(page, targetUrl) {
+  if (!pageMatchesTarget(page.url(), targetUrl)) {
+    throw new Error(
+      `Refusing to control a page outside the configured 2048 URL: ${targetUrl}`,
+    );
   }
 }
 
@@ -156,12 +170,15 @@ export class BrowserManager {
     );
     if (matchingPage) {
       await matchingPage.bringToFront();
+      assertTargetPage(matchingPage, this.#targetUrl);
       return matchingPage;
     }
 
     const page = await browser.newPage();
     await page.goto(this.#targetUrl, { waitUntil: "domcontentloaded" });
+    assertTargetPage(page, this.#targetUrl);
     await page.bringToFront();
+    assertTargetPage(page, this.#targetUrl);
     return page;
   }
 

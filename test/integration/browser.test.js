@@ -12,8 +12,10 @@ import {
 const TARGET_URL = "https://play2048.co/";
 
 class FakePage {
-  constructor(url = "about:blank") {
+  constructor(url = "about:blank", { gotoUrl = null, frontUrl = null } = {}) {
     this.currentUrl = url;
+    this.gotoUrl = gotoUrl;
+    this.frontUrl = frontUrl;
     this.gotoCalls = [];
     this.frontCalls = 0;
     this.evaluateCalls = 0;
@@ -26,12 +28,13 @@ class FakePage {
   }
 
   async goto(url) {
-    this.currentUrl = url;
+    this.currentUrl = this.gotoUrl ?? url;
     this.gotoCalls.push(url);
   }
 
   async bringToFront() {
     this.frontCalls += 1;
+    if (this.frontUrl) this.currentUrl = this.frontUrl;
   }
 
   async evaluate() {
@@ -185,29 +188,106 @@ test("browser input helpers validate and press arrow keys", async () => {
   assert.equal(page.evaluateCalls, 2);
 });
 
-test("connect mode validates the DevTools URL", async () => {
+test("connect mode accepts only HTTP(S) loopback DevTools URLs", async () => {
+  const accepted = [];
+  for (const connectUrl of [
+    "http://localhost:9222",
+    "https://127.0.0.1:9222",
+    "http://[::1]:9222",
+  ]) {
+    const browser = new FakeBrowser([new FakePage(TARGET_URL)]);
+    const manager = new BrowserManager({
+      targetUrl: TARGET_URL,
+      puppeteerApi: {
+        async connect(options) {
+          accepted.push(options.browserURL);
+          return browser;
+        },
+      },
+    });
+    await manager.withPage(
+      { browserMode: "connect", connectUrl },
+      async () => {},
+    );
+  }
+  assert.deepEqual(accepted, [
+    "http://localhost:9222",
+    "https://127.0.0.1:9222",
+    "http://[::1]:9222",
+  ]);
+
+  let connectCalls = 0;
   const manager = new BrowserManager({
     targetUrl: TARGET_URL,
     puppeteerApi: {
       async connect() {
+        connectCalls += 1;
         throw new Error("should not run");
       },
     },
   });
+  for (const [browserMode, connectUrl] of [
+    ["auto", "https://example.com"],
+    ["connect", "http://192.168.1.10:9222"],
+    ["connect", "http://169.254.169.254"],
+  ]) {
+    await assert.rejects(
+      () => manager.withPage({ browserMode, connectUrl }, async () => {}),
+      /loopback host/,
+    );
+  }
+  for (const connectUrl of ["file:///tmp/chrome", "invalid"]) {
+    await assert.rejects(
+      () =>
+        manager.withPage({ browserMode: "auto", connectUrl }, async () => {}),
+      /HTTP or HTTPS/,
+    );
+  }
+  assert.equal(connectCalls, 0);
+});
+
+test("new pages reject redirects outside the target origin and path", async () => {
+  const browser = new FakeBrowser();
+  const redirected = new FakePage("about:blank", {
+    gotoUrl: "https://example.com/",
+  });
+  browser.newPage = async () => {
+    browser.pageList.push(redirected);
+    return redirected;
+  };
+  const manager = new BrowserManager({
+    targetUrl: TARGET_URL,
+    puppeteerApi: { connect: async () => browser },
+  });
+  let callbackCalled = false;
   await assert.rejects(
     () =>
-      manager.withPage(
-        { browserMode: "connect", connectUrl: "file:///tmp/chrome" },
-        async () => {},
-      ),
-    /HTTP or HTTPS/,
+      manager.withPage({ browserMode: "connect" }, async () => {
+        callbackCalled = true;
+      }),
+    /Refusing to control/,
   );
+  assert.equal(callbackCalled, false);
+  assert.equal(browser.disconnectCalls, 1);
+});
+
+test("reused pages are revalidated immediately before use", async () => {
+  const matching = new FakePage(TARGET_URL, {
+    frontUrl: "https://play2048.co/classic",
+  });
+  const browser = new FakeBrowser([matching]);
+  const manager = new BrowserManager({
+    targetUrl: TARGET_URL,
+    puppeteerApi: { connect: async () => browser },
+  });
+  let callbackCalled = false;
   await assert.rejects(
     () =>
-      manager.withPage(
-        { browserMode: "auto", connectUrl: "invalid" },
-        async () => {},
-      ),
-    /HTTP or HTTPS/,
+      manager.withPage({ browserMode: "connect" }, async () => {
+        callbackCalled = true;
+      }),
+    /Refusing to control/,
   );
+  assert.equal(callbackCalled, false);
+  assert.equal(browser.disconnectCalls, 1);
 });

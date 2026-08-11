@@ -58,11 +58,13 @@ The game URL is not a tool argument. All browser tools operate only on `https://
 All browser tools accept these common options:
 
 - `browserMode`: `auto` (default), `connect`, or `launch`.
-- `connectUrl`: Chrome DevTools HTTP endpoint; defaults to `http://127.0.0.1:9222`.
+- `connectUrl`: loopback-only Chrome DevTools HTTP endpoint; the host must be `localhost`, `127.0.0.1`, or `::1`. It defaults to `http://127.0.0.1:9222`.
 - `browserExecutablePath`: optional explicit Chrome/Chromium executable path.
 - `headless`: whether a launched browser is hidden; defaults to `false`.
 
 `auto` first attempts the DevTools endpoint and launches Chrome if the connection fails. `connect` only attaches to a browser started with remote debugging and disconnects after each tool call. `launch` starts a server-owned browser, reuses it between calls, and closes it when the MCP server shuts down.
+
+Browser tools reject pages that redirect away from the `https://play2048.co/` origin or root path.
 
 When launching, the executable is resolved in this order:
 
