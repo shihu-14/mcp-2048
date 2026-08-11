@@ -1,309 +1,211 @@
-#!/usr/bin/env node
-import { chooseMove } from "./game.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { z } from "zod";
+
 import {
-  DEFAULT_BROWSER_EXECUTABLE_PATH,
-  DEFAULT_BROWSER_MODE,
-  DEFAULT_CONNECT_URL,
-  DEFAULT_DEPTH,
   DEFAULT_DELAY_MS,
-  DEFAULT_MAX_STEPS,
+  DEFAULT_DEPTH,
   DEFAULT_MAX_RESTARTS,
-  DEFAULT_TARGET_URL,
+  DEFAULT_MAX_STEPS,
   MAX_DELAY_MS,
+  MAX_RESTARTS,
+  MAX_STEPS,
   MIN_DELAY_MS,
-  inspect2048,
-  play2048,
-  start2048,
-  step2048
-} from "./browser.js";
+  GameController,
+} from "./controller.js";
+import { DEFAULT_BROWSER_MODE, DEFAULT_CONNECT_URL } from "./browser.js";
+import { isTileValue } from "./game.js";
+import { chooseMove } from "./solver.js";
 
-const PROTOCOL_VERSION = "2024-11-05";
+const directionSchema = z.enum(["up", "down", "left", "right"]);
+const boardSchema = z
+  .array(z.array(z.number().int()).length(4))
+  .length(4)
+  .refine((board) => board.every((row) => row.every(isTileValue)), {
+    message: "Board cells must be 0 or powers of two greater than 1.",
+  });
 
-const browserProperties = {
-  browserMode: {
-    type: "string",
-    enum: ["auto", "connect", "launch"],
-    default: DEFAULT_BROWSER_MODE,
-    description: "auto tries connectUrl first, then launches Chrome if the default debugging port is unavailable."
-  },
-  connectUrl: {
-    type: "string",
-    description: "Chrome DevTools browser URL used when browserMode is auto or connect.",
-    default: DEFAULT_CONNECT_URL
-  },
-  browserExecutablePath: {
-    type: "string",
-    description: "Chromium executable path used when launching a controlled browser.",
-    default: DEFAULT_BROWSER_EXECUTABLE_PATH
-  },
-  headless: {
-    type: "boolean",
-    description: "Launch browser in headless mode when browserMode is launch or auto falls back to launch.",
-    default: false
-  },
-  targetUrl: {
-    type: "string",
-    description: "URL for the 2048 game tab.",
-    default: DEFAULT_TARGET_URL
-  }
+const browserShape = {
+  browserMode: z
+    .enum(["auto", "connect", "launch"])
+    .default(DEFAULT_BROWSER_MODE),
+  connectUrl: z.url().default(DEFAULT_CONNECT_URL),
+  browserExecutablePath: z.string().min(1).optional(),
+  headless: z.boolean().default(false),
 };
 
-const runProperties = {
-  ...browserProperties,
-  maxSteps: {
-    type: "integer",
-    minimum: 1,
-    default: DEFAULT_MAX_STEPS
-  },
-  maxRestarts: {
-    type: "integer",
-    minimum: 0,
-    default: DEFAULT_MAX_RESTARTS
-  },
-  restartOnGameOver: {
-    type: "boolean",
-    default: true
-  },
-  delayMs: {
-    type: "integer",
-    minimum: MIN_DELAY_MS,
-    maximum: MAX_DELAY_MS,
-    default: DEFAULT_DELAY_MS
-  },
-  depth: {
-    type: "integer",
-    minimum: 0,
-    maximum: 5,
-    default: DEFAULT_DEPTH
-  }
-};
+const depthSchema = z.number().int().min(0).max(5).default(DEFAULT_DEPTH);
+const delaySchema = z
+  .number()
+  .int()
+  .min(MIN_DELAY_MS)
+  .max(MAX_DELAY_MS)
+  .default(DEFAULT_DELAY_MS);
+const gameStateSchema = z.strictObject({
+  board: boardSchema,
+  status: z.enum(["playing", "won", "game-over"]),
+  score: z.number().int().nonnegative().nullable(),
+  recognitionSource: z.string(),
+  tileCount: z.number().int().min(1).max(16),
+  duplicateTiles: z.number().int().nonnegative(),
+});
+const decisionSchema = z.strictObject({
+  direction: directionSchema.nullable(),
+  scores: z.record(z.string(), z.number()),
+  legalMoves: z.array(directionSchema),
+  scoreGain: z.number().int().nonnegative().optional(),
+  resultingBoard: boardSchema.optional(),
+  depth: z.number().int().min(0).max(5),
+  gameOver: z.boolean(),
+});
+const inspectOutputSchema = z.strictObject({
+  state: gameStateSchema,
+  emptyCellCount: z.number().int().min(0).max(16),
+  maxTile: z.number().int().nonnegative(),
+  recommendation: decisionSchema,
+});
+const stepOutputSchema = z.strictObject({
+  stopped: z.boolean(),
+  reason: z
+    .enum(["won", "game-over", "no-legal-moves", "unchanged-board"])
+    .nullable(),
+  direction: directionSchema.nullable(),
+  before: gameStateSchema,
+  after: gameStateSchema,
+  recovered: z.boolean(),
+});
+const playOutputSchema = z.strictObject({
+  stopped: z.literal(true),
+  reason: z.enum([
+    "won",
+    "game-over",
+    "no-legal-moves",
+    "unchanged-board",
+    "max-steps",
+  ]),
+  moveCount: z.number().int().nonnegative(),
+  restartCount: z.number().int().nonnegative(),
+  final: gameStateSchema,
+  maxTile: z.number().int().nonnegative(),
+  recentMoves: z
+    .array(
+      z.strictObject({
+        move: z.number().int().positive(),
+        direction: directionSchema,
+        score: z.number().int().nonnegative().nullable(),
+        status: z.enum(["playing", "won", "game-over"]),
+        recovered: z.boolean(),
+      }),
+    )
+    .max(20),
+});
 
-const toolDefinitions = [
-  {
-    name: "start_2048",
-    description: "Start playing 2048 with reliable defaults. No arguments are required.",
-    inputSchema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        ...runProperties
-      }
-    }
-  },
-  {
-    name: "inspect_2048",
-    description: "Read the current 2048 board from a browser tab and return status plus a recommended move.",
-    inputSchema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        ...browserProperties,
-        depth: {
-          type: "integer",
-          minimum: 0,
-          maximum: 5,
-          default: DEFAULT_DEPTH,
-          description: "Search depth override."
-        }
-      }
-    }
-  },
-  {
-    name: "choose_2048_move",
-    description: "Choose the best legal move for a provided 4x4 2048 board without controlling the browser.",
-    inputSchema: {
-      type: "object",
-      additionalProperties: false,
-      required: ["board"],
-      properties: {
-        board: {
-          type: "array",
-          minItems: 4,
-          maxItems: 4,
-          items: {
-            type: "array",
-            minItems: 4,
-            maxItems: 4,
-            items: {
-              type: "integer",
-              minimum: 0
-            }
-          }
-        },
-        depth: {
-          type: "integer",
-          minimum: 0,
-          maximum: 5,
-          description: "Search depth override."
-        }
-      }
-    }
-  },
-  {
-    name: "step_2048",
-    description: "Read the current board, choose one legal move, send the matching arrow key, and wait for the board to settle.",
-    inputSchema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        ...browserProperties,
-        delayMs: {
-          type: "integer",
-          minimum: MIN_DELAY_MS,
-          maximum: MAX_DELAY_MS,
-          default: DEFAULT_DELAY_MS
-        },
-        depth: {
-          type: "integer",
-          minimum: 0,
-          maximum: 5,
-          default: DEFAULT_DEPTH
-        }
-      }
-    }
-  },
-  {
-    name: "play_2048",
-    description: "Run the autonomous recognize, reason, and arrow-key loop until win, game over, no legal moves, or maxSteps.",
-    inputSchema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        ...runProperties
-      }
-    }
-  }
-];
-
-async function callTool(name, args = {}) {
-  if (name === "start_2048") {
-    return start2048(args);
-  }
-  if (name === "inspect_2048") {
-    return inspect2048(args);
-  }
-  if (name === "choose_2048_move") {
-    return chooseMove(args.board, { depth: args.depth });
-  }
-  if (name === "step_2048") {
-    return step2048(args);
-  }
-  if (name === "play_2048") {
-    return play2048(args);
-  }
-  throw new Error(`Unknown tool: ${name}`);
-}
-
-function response(id, result) {
+function success(result) {
   return {
-    jsonrpc: "2.0",
-    id,
-    result
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
   };
 }
 
-function errorResponse(id, code, message, data) {
+function failure(error) {
+  const message = error instanceof Error ? error.message : String(error);
   return {
-    jsonrpc: "2.0",
-    id,
-    error: {
-      code,
-      message,
-      data
-    }
+    content: [{ type: "text", text: message }],
+    isError: true,
   };
 }
 
-function writeMessage(message) {
-  process.stdout.write(`${JSON.stringify(message)}\n`);
-}
-
-async function handleRequest(message) {
-  const { id, method, params } = message;
-
-  if (method === "initialize") {
-    return response(id, {
-      protocolVersion: params?.protocolVersion ?? PROTOCOL_VERSION,
-      capabilities: {
-        tools: {}
-      },
-      serverInfo: {
-        name: "mcp-2048",
-        version: "0.1.0"
-      }
-    });
-  }
-
-  if (method === "tools/list") {
-    return response(id, {
-      tools: toolDefinitions
-    });
-  }
-
-  if (method === "tools/call") {
+function registerTool(server, name, config, handler) {
+  server.registerTool(name, config, async (args) => {
     try {
-      const result = await callTool(params?.name, params?.arguments ?? {});
-      return response(id, {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(result, null, 2)
-          }
-        ],
-        isError: false
-      });
+      return success(await handler(args));
     } catch (error) {
-      return response(id, {
-        content: [
-          {
-            type: "text",
-            text: error instanceof Error ? error.message : String(error)
-          }
-        ],
-        isError: true
-      });
+      return failure(error);
     }
-  }
-
-  if (method === "ping") {
-    return response(id, {});
-  }
-
-  if (method?.startsWith("notifications/")) {
-    return null;
-  }
-
-  return errorResponse(id, -32601, `Method not found: ${method}`);
+  });
 }
 
-let buffer = "";
+export function createServer({ controller = new GameController() } = {}) {
+  const server = new McpServer(
+    { name: "mcp-2048", version: "0.1.0" },
+    {
+      instructions:
+        "Use inspect_2048 to read the game, step_2048 for one move, play_2048 for autoplay, and choose_2048_move for an offline board. The browser target is always https://play2048.co/.",
+    },
+  );
 
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => {
-  buffer += chunk;
-  const lines = buffer.split(/\r?\n/);
-  buffer = lines.pop() ?? "";
+  registerTool(
+    server,
+    "inspect_2048",
+    {
+      title: "Inspect 2048",
+      description:
+        "Read the current play2048.co board and recommend a legal move.",
+      inputSchema: z.strictObject({ ...browserShape, depth: depthSchema }),
+      outputSchema: inspectOutputSchema,
+    },
+    (args) => controller.inspect(args),
+  );
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
-    }
+  registerTool(
+    server,
+    "choose_2048_move",
+    {
+      title: "Choose 2048 Move",
+      description:
+        "Choose a legal move for a provided 4x4 board without using a browser.",
+      inputSchema: z.strictObject({ board: boardSchema, depth: depthSchema }),
+      outputSchema: decisionSchema,
+      annotations: { readOnlyHint: true },
+    },
+    ({ board, depth }) => chooseMove(board, { depth }),
+  );
 
-    void (async () => {
-      try {
-        const message = JSON.parse(trimmed);
-        const result = await handleRequest(message);
-        if (result && message.id !== undefined) {
-          writeMessage(result);
-        }
-      } catch (error) {
-        writeMessage(errorResponse(null, -32700, "Parse error", error instanceof Error ? error.message : String(error)));
-      }
-    })();
-  }
-});
+  registerTool(
+    server,
+    "step_2048",
+    {
+      title: "Step 2048",
+      description:
+        "Read the current board, choose one move, press its arrow key, and verify the result.",
+      inputSchema: z.strictObject({
+        ...browserShape,
+        delayMs: delaySchema,
+        depth: depthSchema,
+      }),
+      outputSchema: stepOutputSchema,
+    },
+    (args) => controller.step(args),
+  );
 
-process.stdin.on("end", () => {
-  process.exit(0);
-});
+  registerTool(
+    server,
+    "play_2048",
+    {
+      title: "Play 2048",
+      description:
+        "Autonomously play on play2048.co and return a compact final summary.",
+      inputSchema: z.strictObject({
+        ...browserShape,
+        delayMs: delaySchema,
+        depth: depthSchema,
+        maxSteps: z
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_STEPS)
+          .default(DEFAULT_MAX_STEPS),
+        maxRestarts: z
+          .number()
+          .int()
+          .min(0)
+          .max(MAX_RESTARTS)
+          .default(DEFAULT_MAX_RESTARTS),
+        restartOnGameOver: z.boolean().default(true),
+      }),
+      outputSchema: playOutputSchema,
+    },
+    (args) => controller.play(args),
+  );
+
+  return server;
+}

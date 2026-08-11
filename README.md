@@ -1,201 +1,120 @@
 # mcp-2048
 
-MCP server for autonomously playing the browser version of 2048 at `https://play2048.co/`.
+`mcp-2048` is a local [Model Context Protocol](https://modelcontextprotocol.io/) server that lets an LLM inspect and play 2048 at [play2048.co](https://play2048.co/).
 
-The server recognizes the 4x4 board from the current `play2048.co` browser state or from classic 2048 DOM tiles, chooses a move with a corner-oriented heuristic and expectimax search, sends `ArrowUp`, `ArrowDown`, `ArrowLeft`, or `ArrowRight` through Puppeteer, waits between moves, and stops on win, game over, max steps, or repeated input failure.
-
-## Sample Video
-
-<video src="assets/2048-sample-video.mov" controls width="720"></video>
-
-[Open sample video](assets/2048-sample-video.mov)
+The server reads the board from the site's local storage or DOM, chooses a legal move with a heuristic expectimax solver, and sends arrow-key input through Puppeteer. The target URL is intentionally fixed to `https://play2048.co/`.
 
 ## Requirements
 
-- Node.js 20 or newer
-- Google Chrome or another Chromium-based browser
+- Node.js 22 or newer
+- Google Chrome or a Chromium-based browser installed in a standard location
 
-Manual remote debugging is optional. By default, `browserMode: "auto"` tries `http://127.0.0.1:9222` first and launches a controlled Chrome window automatically if that debugging endpoint is not available.
-
-Remote debugging is only needed when you want the MCP server to attach to a browser window you started yourself. A normal Chrome window does not expose an automation endpoint for security and profile-locking reasons, so Puppeteer cannot control an arbitrary already-open browser unless Chrome was started with `--remote-debugging-port`.
-
-Chrome may print GoogleUpdater, GCM, TensorFlow Lite, Metal, IME, or SSL handshake messages to the terminal. Those messages are Chrome diagnostics, not 2048 failures. The MCP-launched browser uses quieter launch flags and does not require you to keep a noisy Chrome command open in Terminal.
-
-## Install
+## Setup
 
 ```sh
+git clone https://github.com/shihu-14/mcp-2048.git
+cd mcp-2048
 npm install
 ```
 
-## MCP Configuration
+## MCP configuration
 
-Example MCP client configuration:
+Configure your MCP client to start the stdio server with Node.js:
 
 ```json
 {
   "mcpServers": {
     "mcp-2048": {
       "command": "node",
-      "args": ["/Users/eiichi/mcp_2048/src/server.js"]
+      "args": ["<repository-path>/src/index.js"]
     }
   }
 }
 ```
 
-If your client already has other MCP servers, add `mcp-2048` under the same `mcpServers` object.
+Replace `<repository-path>` with the absolute path to this repository. The server writes MCP messages only to stdout and sends diagnostics to stderr.
 
-## Chat Prompts
+## Usage
 
-Shortest start prompt:
+Ask the MCP client to call one of the following tools:
 
-```text
-mcp-2048で2048を開始して。
-```
+| Tool               | Purpose                                                                           |
+| ------------------ | --------------------------------------------------------------------------------- |
+| `inspect_2048`     | Read the current board, score, status, recognition source, and recommended move.  |
+| `choose_2048_move` | Choose a move for a supplied 4x4 board without opening a browser.                 |
+| `step_2048`        | Recognize the board, choose one move, press its arrow key, and verify the result. |
+| `play_2048`        | Run the autonomous loop and return a compact summary plus the latest 20 moves.    |
 
-The intended tool is `start_2048`. It already uses `https://play2048.co/`, automatic browser launch, `maxSteps: 3000`, `delayMs: 5`, `restartOnGameOver: true`, `maxRestarts: 5`, and `depth: 2`.
-
-One move only:
-
-```text
-mcp-2048 の step_2048 を使って現在の盤面を読んで1手だけ操作して。
-targetUrl は https://play2048.co/、delayMs は 5。
-```
-
-Inspect only:
+Example prompt:
 
 ```text
-mcp-2048 の inspect_2048 を使って現在の2048の盤面、空きマス、推奨手を読んで。
+Use play_2048 to play 2048. Launch a visible browser and stop after at most 3000 moves.
 ```
 
-Attach to a browser you manually started with remote debugging:
+The game URL is not a tool argument. All browser tools operate only on `https://play2048.co/`.
 
-```text
-mcp-2048 の play_2048 を使って。
-browserMode は connect、connectUrl は http://127.0.0.1:9222、targetUrl は https://play2048.co/。
-```
+## Browser modes
 
-## Tools
+All browser tools accept these common options:
 
-- `start_2048`: starts autoplay with reliable defaults. No arguments are required.
-- `inspect_2048`: connects to the browser and reads the current board, empty cells, score text, game status, recognition source, and recommended move.
-- `choose_2048_move`: chooses the best move for a provided 4x4 board without touching the browser.
-- `step_2048`: reads the current browser board, chooses one legal move, sends the arrow key, waits for the board to settle, and retries focus once if the board did not change.
-- `play_2048`: runs the autonomous loop until win, game over, no legal moves, unchanged board failure, or `maxSteps`. It can reset and retry after game over.
+- `browserMode`: `auto` (default), `connect`, or `launch`.
+- `connectUrl`: Chrome DevTools HTTP endpoint; defaults to `http://127.0.0.1:9222`.
+- `browserExecutablePath`: optional explicit Chrome/Chromium executable path.
+- `headless`: whether a launched browser is hidden; defaults to `false`.
 
-Common arguments:
+`auto` first attempts the DevTools endpoint and launches Chrome if the connection fails. `connect` only attaches to a browser started with remote debugging and disconnects after each tool call. `launch` starts a server-owned browser, reuses it between calls, and closes it when the MCP server shuts down.
 
-- `browserMode`: `auto`, `connect`, or `launch`. Defaults to `auto`.
-- `connectUrl`: Chrome DevTools endpoint used by `auto` and `connect`. Defaults to `http://127.0.0.1:9222`.
-- `browserExecutablePath`: Chromium executable used by `launch`. Defaults to `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`.
-- `headless`: launch without a visible window. Defaults to `false`.
-- `targetUrl`: game URL. Defaults to `https://play2048.co/`.
-- `maxSteps`: upper bound for a run. Defaults to `3000`.
-- `delayMs`: delay after each key action. Defaults to `5`. Valid range is `5` to `1000`.
-- `restartOnGameOver`: reset and retry when the board reaches game over. Defaults to `true`.
-- `maxRestarts`: maximum reset count in one `play_2048` run. Defaults to `5`.
-- `depth`: search depth override. Defaults to `2`. Higher can improve moves but slows each step.
+When launching, the executable is resolved in this order:
 
-Example MCP tool input:
+1. `browserExecutablePath`
+2. `MCP_2048_BROWSER_EXECUTABLE_PATH`
+3. Puppeteer's standard `chrome` channel lookup
 
-```json
-{
-  "browserMode": "auto",
-  "targetUrl": "https://play2048.co/",
-  "maxSteps": 3000,
-  "delayMs": 5,
-  "restartOnGameOver": true,
-  "maxRestarts": 5,
-  "depth": 2
-}
-```
+`step_2048` and `play_2048` also accept `delayMs` from 5 to 1000 and solver `depth` from 0 to 5. `play_2048` accepts `maxSteps` from 1 to 10000, `maxRestarts` from 0 to 20, and `restartOnGameOver`.
 
-## Rules
-
-- The board is 4x4.
-- A move is one of `ArrowUp`, `ArrowDown`, `ArrowLeft`, or `ArrowRight`.
-- Every tile slides as far as possible in the selected direction.
-- Equal tiles that collide merge into one tile with the summed value.
-- A tile created by a merge cannot merge again in the same move.
-- After a valid move, the game adds one random `2` or `4` tile to an empty cell.
-- The run is won when the page reports the 2048 win state.
-- The run is game over when the board is full and no direction can move or merge tiles.
-
-## Completion Strategy
-
-Use this for the most reliable run:
-
-```json
-{
-  "browserMode": "auto",
-  "targetUrl": "https://play2048.co/",
-  "maxSteps": 3000,
-  "delayMs": 5,
-  "restartOnGameOver": true,
-  "maxRestarts": 5,
-  "depth": 2
-}
-```
-
-The decision engine evaluates only legal moves. It combines expected random tile spawns with heuristics for:
-
-- preserving empty cells,
-- increasing merge opportunities,
-- keeping large tiles in a stable lower-left corner pattern,
-- maintaining monotonic rows and columns,
-- avoiding rough neighboring tile jumps.
-
-2048 includes random tile spawns, so a win cannot be mathematically guaranteed by one run. `restartOnGameOver` and `maxRestarts` are the intended completion path when randomness or an earlier weak board causes a loss.
-
-## Stop Reasons And Recovery
-
-- `won`: complete. Stop.
-- `game-over`: no legal moves remain. Run again with `restartOnGameOver: true` or increase `maxRestarts`.
-- `no-legal-moves`: the recognizer sees a full immovable board before the page reports game over. Treat it like game over.
-- `max-steps`: the run hit the step cap before winning or losing. Increase `maxSteps`, for example to `3000`.
-- `unchanged-board`: the chosen legal key did not change the board after focus retry. Click the game window, close overlays, or use `browserMode: "launch"` so the controlled browser owns focus.
-- Recognition error: the page is not loaded, blocked, or not at `https://play2048.co/`. Reload the target URL or call `inspect_2048` first.
-- Slow run: reduce `depth`. `delayMs` defaults to `5`; if inputs are missed, raise it to `50` or `75`.
-
-## Manual Remote Debugging Mode
-
-Only use this when you want to control a browser window you opened yourself:
+## Development
 
 ```sh
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir=/private/tmp/mcp-2048-chrome \
-  --disable-background-networking \
-  --disable-component-update \
-  --disable-sync \
-  --log-level=3 \
-  --no-first-run
-```
-
-If you do not want Chrome diagnostics in the terminal, redirect stderr:
-
-```sh
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir=/private/tmp/mcp-2048-chrome \
-  --disable-background-networking \
-  --disable-component-update \
-  --disable-sync \
-  --log-level=3 \
-  --no-first-run 2>/dev/null &
-```
-
-Then open `https://play2048.co/` and call tools with:
-
-```json
-{
-  "browserMode": "connect",
-  "connectUrl": "http://127.0.0.1:9222",
-  "targetUrl": "https://play2048.co/"
-}
-```
-
-## Test
-
-```sh
+npm run lint
+npm run format:check
 npm test
+npm run test:coverage
+npm audit --omit=dev --audit-level=high
 ```
+
+The live test launches Chrome, accesses the third-party game site, recognizes a board, and performs one move:
+
+```sh
+npm run test:e2e
+```
+
+The live test is intentionally excluded from CI. CI runs lint, formatting, unit/integration tests, coverage, and the production dependency audit on Node.js 22 and 24.
+
+## Project structure
+
+```text
+src/
+├── index.js         stdio entrypoint and shutdown
+├── server.js        official MCP SDK tool registration and schemas
+├── controller.js    inspect, step, autoplay, restart, and concurrency control
+├── browser.js       browser ownership, page selection, focus, and keyboard input
+├── recognition.js   play2048.co storage/DOM recognition
+├── game.js          pure 2048 board rules
+└── solver.js        pure heuristic and expectimax move selection
+
+test/unit/           pure logic and recognition tests
+test/integration/    browser, controller, and MCP integration tests
+e2e/                 explicit live-site test
+```
+
+## Limitations
+
+- Board recognition depends on the current `play2048.co` storage and DOM formats. A site update can require an adapter update.
+- 2048 uses random tile placement, so autoplay cannot guarantee a win.
+- Only one browser-controlling tool may run at a time. Concurrent browser calls return a busy error; offline move selection remains available.
+- Long autoplay calls are still bounded by the MCP client's request timeout. Responses retain only aggregate counts, the final board, and the latest 20 moves.
+- The project uses `puppeteer-core` and does not download a bundled browser.
+
+## License
+
+MIT
