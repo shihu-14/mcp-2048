@@ -105,9 +105,7 @@ export class BrowserManager {
   async #launch(options) {
     if (this.#launchedBrowser?.isConnected?.()) return this.#launchedBrowser;
 
-    const executablePath =
-      options.browserExecutablePath ??
-      process.env.MCP_2048_BROWSER_EXECUTABLE_PATH;
+    const executablePath = process.env.MCP_2048_BROWSER_EXECUTABLE_PATH;
     const launchOptions = {
       browser: "chrome",
       headless: options.headless ?? false,

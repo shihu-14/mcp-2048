@@ -29,7 +29,6 @@ const browserShape = {
     .enum(["auto", "connect", "launch"])
     .default(DEFAULT_BROWSER_MODE),
   connectUrl: z.url().default(DEFAULT_CONNECT_URL),
-  browserExecutablePath: z.string().min(1).optional(),
   headless: z.boolean().default(false),
 };
 

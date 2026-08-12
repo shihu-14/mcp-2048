@@ -97,6 +97,12 @@ test("official SDK lists four tools, validates input, and returns structured out
       listed.tools.some((tool) => "targetUrl" in tool.inputSchema.properties),
       false,
     );
+    assert.equal(
+      listed.tools.some(
+        (tool) => "browserExecutablePath" in tool.inputSchema.properties,
+      ),
+      false,
+    );
 
     const inspected = await client.callTool({
       name: "inspect_2048",

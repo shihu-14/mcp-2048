@@ -59,7 +59,6 @@ All browser tools accept these common options:
 
 - `browserMode`: `auto` (default), `connect`, or `launch`.
 - `connectUrl`: loopback-only Chrome DevTools HTTP endpoint; the host must be `localhost`, `127.0.0.1`, or `::1`. It defaults to `http://127.0.0.1:9222`.
-- `browserExecutablePath`: optional explicit Chrome/Chromium executable path.
 - `headless`: whether a launched browser is hidden; defaults to `false`.
 
 `auto` first attempts the DevTools endpoint and launches Chrome if the connection fails. `connect` only attaches to a browser started with remote debugging and disconnects after each tool call. `launch` starts a server-owned browser, reuses it between calls, and closes it when the MCP server shuts down.
@@ -68,9 +67,10 @@ Browser tools reject pages that redirect away from the `https://play2048.co/` or
 
 When launching, the executable is resolved in this order:
 
-1. `browserExecutablePath`
-2. `MCP_2048_BROWSER_EXECUTABLE_PATH`
-3. Puppeteer's standard `chrome` channel lookup
+1. `MCP_2048_BROWSER_EXECUTABLE_PATH`
+2. Puppeteer's standard `chrome` channel lookup
+
+Set `MCP_2048_BROWSER_EXECUTABLE_PATH` in the MCP server environment only when Chrome cannot be discovered automatically.
 
 `step_2048` and `play_2048` also accept `delayMs` from 5 to 1000 and solver `depth` from 0 to 5. `play_2048` accepts `maxSteps` from 1 to 10000, `maxRestarts` from 0 to 20, and `restartOnGameOver`.
 

@@ -152,7 +152,7 @@ test("launch mode discovers Chrome by channel, reuses it, and closes it", async 
   assert.equal(browser.closeCalls, 1);
 });
 
-test("explicit executable path wins and auto falls back to launch", async () => {
+test("environment executable path wins and auto falls back to launch", async () => {
   const browser = new FakeBrowser();
   let launchedWith;
   const manager = new BrowserManager({
@@ -167,13 +167,20 @@ test("explicit executable path wins and auto falls back to launch", async () => 
       },
     },
   });
-  await manager.withPage(
-    { browserMode: "auto", browserExecutablePath: "/opt/chrome" },
-    async () => {},
-  );
-  assert.equal(launchedWith.executablePath, "/opt/chrome");
-  assert.equal("channel" in launchedWith, false);
-  await manager.close();
+  const previousExecutablePath = process.env.MCP_2048_BROWSER_EXECUTABLE_PATH;
+  process.env.MCP_2048_BROWSER_EXECUTABLE_PATH = "/opt/chrome";
+  try {
+    await manager.withPage({ browserMode: "auto" }, async () => {});
+    assert.equal(launchedWith.executablePath, "/opt/chrome");
+    assert.equal("channel" in launchedWith, false);
+    await manager.close();
+  } finally {
+    if (previousExecutablePath === undefined) {
+      delete process.env.MCP_2048_BROWSER_EXECUTABLE_PATH;
+    } else {
+      process.env.MCP_2048_BROWSER_EXECUTABLE_PATH = previousExecutablePath;
+    }
+  }
 });
 
 test("browser input helpers validate and press arrow keys", async () => {
